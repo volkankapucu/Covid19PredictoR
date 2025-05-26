@@ -9,7 +9,6 @@ library(shiny)
 library(shinydashboard)
 library(plotly)
 library(rpart.plot)
-#library(DiagrammeR)
 library(rattle)
 library(DT)
 library(caTools)
@@ -18,13 +17,17 @@ library(shinyWidgets)
 library(wordcloud)
 library(RColorBrewer)
 library(formattable)
-#devtools::install_github('skinner927/reprtree')
-#library(reprtree)
+library(lime)
+library(mice)
+library(VIM)
+library(xgboost)
+library(randomForest)
+library(C50)
 
 data_sets <- list(
   'Select a dataset' = "Selection",
   'Brazil Set' = read.csv("data/brazil.csv", fileEncoding="latin1"),
-  'Wuhan Set' = read.csv("data/wuhan.csv", fileEncoding="latin1")
+  'Wuhan Set' = read.csv("data/completedWUHAN.csv", fileEncoding="latin1")
 )
 
 test_data_sets <- list(
@@ -40,12 +43,12 @@ options(spinner.color="#E53935", spinner.color.background="#ffffff", spinner.siz
 ui <- dashboardPage(
   #banner color  
   skin = "red",
-  title = "CoVID19PredictoR",
+  title = "Covid19PredictoR",
   
   # HEADER ---------------------------
   dashboardHeader(
     #banner title
-    title = "CoVID19PredictoR",
+    title = "Covid19PredictoR",
     dropdownMenu(
     )
     ),
@@ -76,7 +79,7 @@ ui <- dashboardPage(
           tabName = "datasum",
           icon = icon("info-circle")
           ),
-
+        
         #Data partition split ratio then traindata and testdata 
         menuItem(
           "Step 3: Set up for training",
@@ -126,20 +129,19 @@ ui <- dashboardPage(
     
     # BODY -------------------------------
     dashboardBody(
-      #tabsetPanel(),
       tabItems(
         # Home ----------
         # This part is for HOME TAB
         tabItem(
           tabName = "Home",
-          h3("CoVID19PredictoR v1.0: A machine learning pipeline and web-based interface to predict risk of CoVID-19",
+          h3("Covid19PredictoR v1.0: A machine learning pipeline and web-based interface to predict risk of Covid-19",
              align = "center"),
-          p("CoVID19PredictoR is an R based  software which develops machine learning models to predict risk of CoVID-19"),
+          p("Covid19PredictoR is an R based  software which develops machine learning models to predict risk of Covid-19"),
           h5(strong("Models you can develop")),
-          p("You can develop logistic regression, C5.0, decision tree, random forest and XGBoost model with CoVID19PredictoR."),
+          p("You can develop logistic regression, C5.0, decision tree, random forest and XGBoost model with Covid19PredictoR."),
           h5(strong("Functionalities")),
-          p("This framework includes summary statistics and data visualization, pre-processing and tuning options. User can develop and validate the model above and can test the model of interest for new patients in prediction module.  "),
-          h5(strong("Using CoVID19PredictoR")),
+          HTML("<p>This framework includes summary statistics and data visualization, <a href='https://topepo.github.io/caret/pre-processing.html'> pre-processing </a> and tuning options <a href='https://topepo.github.io/caret/model-training-and-tuning.html#control'>(train control methods)</a>. User can develop and validate the model above and can test the model of interest for new patients in prediction module.  "),
+          h5(strong("Using Covid19PredictoR")),
           p("The steps for generating results are as follows:"),
           ("1) Import your data"),
           br(),
@@ -170,7 +172,7 @@ ui <- dashboardPage(
           ("Mugla, Turkey, 48000"),
           br(),
           h5(strong("Cite:")),
-          ("Kapucu V, Turhan S, Dogu E. (2021). CoVID19PredictoR v1.0: A machine learning pipeline and web-based interface to predict risk of CoVID-19."),
+          ("Kapucu V, Turhan S, Dogu E. (2021). Covid19PredictoR v1.0: A machine learning pipeline and web-based interface to predict risk of Covid-19."),
           h3(""),
           h3(""),
           h4("")
@@ -235,22 +237,14 @@ ui <- dashboardPage(
           fluidRow(
             
             box(title = "Data table",
-                  solidHeader = T,
-                  width = 10,
-                  collapsible = T,
-                  collapsed = T,
-                  status = "info",
-                  dataTableOutput("contents")
+                solidHeader = T,
+                width = 10,
+                collapsible = T,
+                collapsed = T,
+                status = "info",
+                uiOutput("checkbox"),
+                dataTableOutput("contents")
                 ),
-            
-          #  box(title = "new data",
-          #      solidHeader = T,
-          #      width = 10,
-          #      collapsible = T,
-          #      collapsed = T,
-          #      status = "info",
-          #      dataTableOutput("contents1")
-          #  ),
             
             box(title = "Data structure",
                 solidHeader = T,
@@ -268,20 +262,22 @@ ui <- dashboardPage(
                 collapsible = T,
                 collapsed = T,
                 status = "primary",
-                selectInput(
-                  inputId = "ycol",
-                  label = "Select Y variable",
-                  choices = names(data())
-                ),
+                #selectInput(
+                #  inputId = "ycol",
+                #  label = "Select Y variable",
+                #  choices = names(data())
+                #),
+                h5("Select the variable below for which you want to see descriptive statistics against the response variable."),
                 selectInput(
                   inputId = "xcol",
                   label = "Select X variable",
                   choices = names(data())
                 ),
-                verbatimTextOutput("sumrz"),
-                plotOutput("varplot",
-                           width = "50%",
+               # verbatimTextOutput("sumrz"),
+                plotlyOutput("varplot",
+                           width = "100%",
                            height = "300px")
+                #plotOutput("missing")
                 )
              )
           ),
@@ -291,7 +287,7 @@ ui <- dashboardPage(
           tabName = "choose",
           #h2("You can set data partitioning, K-fold and pre-process options here."),
           fluidRow(
-            box(title = "Step 1: Set data partition ratio",
+            box(title = "Step 1: Set data partition ratio (For training and testing)",
                 solidHeader = T,
                 width = 10 ,
                 collapsible = T,
@@ -304,7 +300,7 @@ ui <- dashboardPage(
                             value = 0.75)
                 ),
             
-            box(title = "Step 2: Set k for k-fold cross-validation",
+            box(title = "Step 2: Set k for k-fold cross-validation (For training)",
                 solidHeader = T,
                 width = 10 ,
                 collapsible = T,
@@ -409,15 +405,6 @@ ui <- dashboardPage(
                                    selected = c("cv")
                                    )
             )
-            
-            #,
-            #tabBox(
-            #  width = "100%",
-            #  title = h3("Data Information"),
-            #  id = "tabset1", height = "250px",
-            #  tabPanel(title = "Train Data", dataTableOutput("trndt")),              
-            #  tabPanel(title = "Test Data", dataTableOutput("tstdt"))
-            #)
             )
           ),       
   
@@ -536,11 +523,6 @@ ui <- dashboardPage(
                         status = "info",
                         withSpinner(verbatimTextOutput("imp_rf"))
                         )
-                   # box(title = "Tree",
-                   #     width = 6,
-                   #     status = "info",
-                   #     withSpinner(plotOutput("tree_rf"))
-                   # )
                     ),
                   #XGB---------
                   tabPanel(
@@ -561,11 +543,6 @@ ui <- dashboardPage(
                         status = "danger",
                         withSpinner(verbatimTextOutput("imp_xgb"))
                         )
-                    #box(title = "Tree",
-                    #    width = 6,
-                    #    status = "danger",
-                    #    withSpinner(plotOutput("tree_xgb"))
-                    #)
                     ),
                   #CompMdls---------
                   tabPanel(
@@ -641,7 +618,7 @@ ui <- dashboardPage(
         #Pred Result------------
         tabItem(
           tabName = "pred",
-          h2("Predictions results"),
+          h2("Prediction results"),
           fluidRow(
             tabBox(
               width = "100%",
@@ -656,46 +633,217 @@ ui <- dashboardPage(
               tabPanel(
                 icon = icon("circle"),
                 title =  "Logistic regression",
-                box(title = "Performance",
-                    width = 7,
-                    status = "warning",
-                    withSpinner(dataTableOutput("pred_glm_result"))
+                #box(title = "Performance",
+                #    width = 7,
+                #    status = "warning",
+                #    withSpinner(dataTableOutput("pred_glm_result"))
+                #),
+                box(title = "Which patient's outcome do you want to know?",
+                    solidHeader = T,
+                    width = 6,
+                    height = 140,
+                    collapsible = T,
+                    collapsed = F,
+                    status = "success",
+                    numericInput(inputId = "num_pat_glm",
+                                label = "Enter the patient's sequence number ",
+                                value = 1,
+                                min = 1,
+                                max = 10
+                                )
+                ),
+                box(title = "Set number of features to explain the model",
+                    solidHeader = T,
+                    width = 6 ,
+                    height = 140,
+                    collapsible = T,
+                    collapsed = F,
+                    status = "success",
+                    sliderInput(inputId = "num_feat_glm",
+                                label = "",
+                                min = 1,
+                                max = 10,
+                                value = 5)
+                ),
+                box(title = "",
+                    width = 12,
+                    #width = "100%",
+                    #height = "100%",
+                    status = "info",
+                    withSpinner(plotOutput("plot_lime_glm"))
                 )
               ),
               tabPanel(
                 icon = icon("circle"),
                 title =  "C5.0",
-                box(title = "Performance",
-                    width = 7,
-                    status = "primary",
-                    withSpinner(dataTableOutput("pred_cfive_result"))
+                #box(title = "Performance",
+                #    width = 7,
+                #    status = "primary",
+                #    withSpinner(dataTableOutput("pred_cfive_result"))
+                #),
+                box(title = "Which patient's outcome do you want to know?",
+                    solidHeader = T,
+                    width = 6,
+                    height = 140,
+                    collapsible = T,
+                    collapsed = F,
+                    status = "success",
+                    numericInput(inputId = "num_pat_c5",
+                                 label = "Enter the patient's sequence number ",
+                                 value = 1,
+                                 min = 1,
+                                 max = 10
+                    )
+                ),
+                box(title = "Set number of features to explain the model",
+                    solidHeader = T,
+                    width = 6 ,
+                    height = 140,
+                    collapsible = T,
+                    collapsed = F,
+                    status = "success",
+                    sliderInput(inputId = "num_feat_c5",
+                                label = "",
+                                min = 1,
+                                max = 10,
+                                value = 5)
+                ),
+                box(title = "",
+                    width = 12,
+                    #width = "100%",
+                    #height = "100%",
+                    status = "info",
+                    withSpinner(plotOutput("plot_lime_c5"))
                 )
               ),
               tabPanel(
                 icon = icon("circle"),
                 title =  "Decision tree",
-                box(title = "Performance",
-                    width = 7,
+                #box(title = "Performance",
+                #    width = 7,
+                #    status = "success",
+                #    withSpinner(dataTableOutput("pred_dtree_result"))
+                #),
+                box(title = "Which patient's outcome do you want to know?",
+                    solidHeader = T,
+                    width = 6,
+                    height = 140,
+                    collapsible = T,
+                    collapsed = F,
                     status = "success",
-                    withSpinner(dataTableOutput("pred_dtree_result"))
+                    numericInput(inputId = "num_pat_dtree",
+                                 label = "Enter the patient's sequence number ",
+                                 value = 1,
+                                 min = 1,
+                                 max = 10
+                    )
+                ),
+                box(title = "Set number of features to explain the model",
+                    solidHeader = T,
+                    width = 6 ,
+                    height = 140,
+                    collapsible = T,
+                    collapsed = F,
+                    status = "success",
+                    sliderInput(inputId = "num_feat_dtree",
+                                label = "",
+                                min = 1,
+                                max = 10,
+                                value = 5)
+                ),
+                box(title = "",
+                    width = 12,
+                    #width = "100%",
+                    #height = "100%",
+                    status = "info",
+                    withSpinner(plotOutput("plot_lime_dtree"))
                 )
               ),
               tabPanel(
                 icon = icon("circle"),
                 title =  "Random forest",
-                box(title = "Performance",
-                    width = 7,
+                #box(title = "Performance",
+                #    #width = 7,
+                #    width = "80%",
+                #    status = "info",
+                #    withSpinner(dataTableOutput("pred_rf_result"))
+                #),
+                box(title = "Which patient's outcome do you want to know?",
+                    solidHeader = T,
+                    width = 6,
+                    height = 140,
+                    collapsible = T,
+                    collapsed = F,
+                    status = "success",
+                    numericInput(inputId = "num_pat_rf",
+                                 label = "Enter the patient's sequence number ",
+                                 value = 1,
+                                 min = 1,
+                                 max = 10
+                                 )
+                    ),
+                box(title = "Set number of features to explain the model",
+                    solidHeader = T,
+                    width = 6 ,
+                    height = 140,
+                    collapsible = T,
+                    collapsed = F,
+                    status = "success",
+                    sliderInput(inputId = "num_feat_rf",
+                                label = "",
+                                min = 1,
+                                max = 10,
+                                value = 5)
+                    ),
+                box(title = "",
+                    width = 12,
+                    #width = "100%",
+                    #height = "100%",
                     status = "info",
-                    withSpinner(dataTableOutput("pred_rf_result"))
-                )
-              ),
+                    withSpinner(plotOutput("plot_lime_rf"))
+                    )
+                ),
               tabPanel(
                 icon = icon("circle"),
                 title =  "XGBoost",
-                box(title = "Performance",
-                    width = 7,
-                    status = "danger",
-                    withSpinner(dataTableOutput("pred_xgb_result"))
+                #box(title = "Performance",
+                #    width = 7,
+                #    status = "danger",
+                #    withSpinner(dataTableOutput("pred_xgb_result"))
+                #),
+                box(title = "Which patient's outcome do you want to know?",
+                    solidHeader = T,
+                    width = 6,
+                    height = 140,
+                    collapsible = T,
+                    collapsed = F,
+                    status = "success",
+                    numericInput(inputId = "num_pat_xgb",
+                                 label = "Enter the patient's sequence number ",
+                                 value = 1,
+                                 min = 1,
+                                 max = 10
+                    )
+                ),
+                box(title = "Set number of features to explain the model",
+                    solidHeader = T,
+                    width = 6 ,
+                    height = 140,
+                    collapsible = T,
+                    collapsed = F,
+                    status = "success",
+                    sliderInput(inputId = "num_feat_xgb",
+                                label = "",
+                                min = 1,
+                                max = 10,
+                                value = 5)
+                ),
+                box(title = "",
+                    width = 12,
+                    #width = "100%",
+                    #height = "100%",
+                    status = "info",
+                    withSpinner(plotOutput("plot_lime_xgb"))
                 )
               )
             )
@@ -710,6 +858,7 @@ ui <- dashboardPage(
 
 # SERVER Title ----------------
 server <- function(input, output, session) {
+  set.seed(1)
   output$choisedata <- renderUI({
     selectInput("chs",
                 label = "",
@@ -722,13 +871,15 @@ server <- function(input, output, session) {
   
   #This is for Upload Yor Data    
   data1 <- reactive({
-    req(input$file1)    ## ?req #  require that the input is available
+    req(input$file1)    # require that the input is available
     inFile <- input$file1
     df <- read.csv(inFile$datapath,
                    header = input$header,
                    sep = input$sep,
                    stringsAsFactors = input$stringAsFactors
                    )
+    names(df)[1]<-"covid"
+    df$covid <- factor(df$covid, labels = c("no", "yes"))
     updateSelectInput(session, inputId = 'xcol', label = 'Select a risk factor',
                       choices = names(df), selected = names(df))
     updateSelectInput(session, inputId = 'ycol', label = 'Select outcome variable:',
@@ -739,6 +890,8 @@ server <- function(input, output, session) {
   data2 <- reactive({
     req(input$crntdata)
     df <- data_sets[[input$crntdata]]
+    names(df)[1]<-"covid"
+    df$covid <- factor(df$covid, labels = c("no", "yes"))
     updateSelectInput(session, inputId = 'xcol', label = 'Select risk factor',
                       choices = names(df), selected = names(df))
     updateSelectInput(session, inputId = 'ycol', label = 'Select outcome variable:',
@@ -747,7 +900,6 @@ server <- function(input, output, session) {
   })
   
   data <- reactive({
-    #req(input$chs)
     if (input$chs == "Upload Your Data") {
       datam <- data1()
     }
@@ -757,8 +909,8 @@ server <- function(input, output, session) {
     }
 
  })
- 
   
+
   output$choisetestdata <- renderUI({
     selectInput("chstst",
                 label = "",
@@ -767,19 +919,6 @@ server <- function(input, output, session) {
                   "Choose Sample Test Data"
                 ),
                 selected = "Upload Your Test Data")
-  })
-  
-  outcomeyy <- reactive({
-    outc <- data()[,1]
-    return(outc)
-  })
-  
-  output$outcomeY <- renderDataTable({
-    
-    DT::datatable(data.frame(data()[,1]), extensions = "ColReorder",
-                  options = list(pageLength=5,
-                                 colReorder = TRUE,
-                                 scrollX = TRUE))
   })
   
   detchoiseX <- reactive({
@@ -798,44 +937,37 @@ server <- function(input, output, session) {
   })
 
   train_data <- reactive ({
-    set.seed(1)
     trn_dt <- data()[partition(),]
     return(trn_dt)
   })
-    
+  
   test_data <- reactive ({
-    set.seed(1)
     tst_dt <- data()[-partition(),]
     return(tst_dt)
   })
   
-
+  output$checkbox <- renderUI({
+    checkboxGroupInput(inputId = "select_var", 
+                       label = "Select variables", 
+                       choices = names(data()),
+                       inline = T
+                       )
+  })
+  df_sel <- reactive({
+    req(input$select_var)
+    df_sel <- data() %>% select(input$select_var)
+  })
+  
   output$contents <- renderDataTable({
-    DT::datatable(data(),
+    DT::datatable(df_sel(),
                   extensions = "ColReorder",
                   options = list(pageLength=5,
                                  colReorder = TRUE,
-                                 scrollX = TRUE)
+                                 scrollX = TRUE,
+                                 searching = F
+                                 )
                   )
   })
-  
-  newdata <- reactive ({
-    set.seed(1)
-    #ndata <- data.frame(data()) %>% relocate(detchoiseY(), .before = data()[,1])
-    ndata <- detchoiseY()
-    return(ndata)
-    
-  })
-  
-  output$contents1 <- renderDataTable({
-    DT::datatable(newdata(),
-                  extensions = "ColReorder",
-                  options = list(pageLength=5,
-                                 colReorder = TRUE,
-                                 scrollX = TRUE)
-    )
-  })
-  
   
   output$str <- renderPrint({
     str(data())
@@ -843,34 +975,47 @@ server <- function(input, output, session) {
     
   output$sumrz <- renderPrint({
     data() %>%
-      group_by(detchoiseY()) %>%
-      summarise(Min = min(detchoiseX()),
-                Max = max(detchoiseX()),
-                Mean= mean(detchoiseX())
-                #Mean= (sum(detchoiseX()/n()))
-                #median=median(detchoiseX())
-                #max=max(detchoiseX())
-                #std=sd(detchoiseX())
+      #group_by(detchoiseY()) %>%
+      group_by(data()[,1]) %>%
+      summarize(
+        n_cases  = n(),
+        Min = min(detchoiseX(), na.rm=TRUE),
+        Max = max(detchoiseX(), na.rm=TRUE),
+        Mean= mean(as.numeric(detchoiseX()[[1]]), na.rm=TRUE),
+        Median=median(as.numeric(detchoiseX()[[1]]), na.rm=TRUE),
+        Std=sd(as.numeric(detchoiseX()[[1]]), na.rm=TRUE)
       )
-    
-    #summary(detchoiseY())
-    #dplyr ve group summarize. dene
+
     })
 
-  output$varplot <- renderPlot({
-    x<-data()[c(input$xcol, input$ycol)]
-    plot(x,
-         xlab = "Risk factor",
-         ylab = "Outcome",
-         col = "red",
-         title("")
-         )
+  output$varplot <- renderPlotly({
+    
+    plot_ly(data(),
+            y = ~get(input$xcol),
+            x = data()[,1],
+            color = "red",
+            type = "violin"
+            #boxpoints = "all",
+            #jitter = 0.3,
+            #pointpos = -1.8
+    )
+  })
+  
+  output$missing <- renderPlot({
+    aggr_plot <- aggr(data(),
+                      col=c('navyblue','red'),
+                      numbers=TRUE,
+                      sortVars=TRUE,
+                      labels=names(data()),
+                      cex.axis=.7,
+                      gap=3,
+                      ylab=c("Histogram of missing data","Pattern"))
+    #mice::md.pattern(data())
   })
   
 
 # Choosing pre-process------------
     txt1 <- reactive ({
-      set.seed(1)
       preppp <- paste(input$chsprep, sep = ",")
       return(preppp)
     })
@@ -890,13 +1035,11 @@ server <- function(input, output, session) {
 
 # Choosing method------------
     txt2 <- reactive ({
-      set.seed(1)
       preppp <- paste(input$chsmthd, sep = ",")
       return(preppp)
     })
     
     control <- reactive({
-      set.seed(1)
       cntrl <- trainControl(method=txt2(),
                               number=input$fld,
                               repeats=1) 
@@ -907,9 +1050,8 @@ server <- function(input, output, session) {
     #GLM-----------
     glm <- reactive ({
       set.seed(1)
-      #Sys.sleep(1) # system sleeping for 1 seconds for demo purpose
-      mdl<- train(as.factor(train_data()[,1])~.,
-                  data=train_data()[,-1],
+      mdl<- train((covid)~.,
+                  data=train_data(),
                   method = "glm",
                   trControl=control(),
                   preProc = c(txt1()),
@@ -918,7 +1060,6 @@ server <- function(input, output, session) {
     })
     
     order_importance_glm <- reactive({
-      set.seed(1)
       importance_mdl<-data.frame(varImp(glm())$importance)
       importance_mdl$Vars<-row.names(importance_mdl)
       ord_imp_mdl<-importance_mdl[order(-importance_mdl$Overall),][1:20,]
@@ -926,7 +1067,6 @@ server <- function(input, output, session) {
     })
     
     test_glm <- reactive({
-      set.seed(1)
       test_mdl <- predict(glm(),
                           test_data(),
                           na.action=na.pass,
@@ -935,10 +1075,9 @@ server <- function(input, output, session) {
     })
     
     cm_glm <- reactive({
-      set.seed(1)
-      conf_mtrx_mdl <- confusionMatrix(as.factor(test_data()[,1]),
+      conf_mtrx_mdl <- confusionMatrix(test_data()$covid,
                                        test_glm(),
-                                       positive='1',
+                                       positive='yes',
                                        mode = "everything")
       return(conf_mtrx_mdl)
     })
@@ -946,8 +1085,6 @@ server <- function(input, output, session) {
     output$glm<- renderPrint({
       print(cm_glm())
       print(glm())
-      #print(order_importance_glm())
-      #print(test_glm())
     })
     
     output$imp_glm <- renderPrint({
@@ -963,9 +1100,8 @@ server <- function(input, output, session) {
     #C5.0-----------
     c5 <- reactive ({
       set.seed(1)
-      #Sys.sleep(1) # system sleeping for 1 seconds for demo purpose
-      mdl<- train(as.factor(train_data()[,1])~.,
-                   data=train_data()[,-1],
+      mdl<- train((covid)~.,
+                   data=train_data(),
                    method = "C5.0",
                    trControl=control(),
                    preProc = c(txt1()),
@@ -974,7 +1110,6 @@ server <- function(input, output, session) {
     })
     
     order_importance_c5 <- reactive({
-      set.seed(1)
       importance_mdl<-data.frame(varImp(c5())$importance)
       importance_mdl$Vars<-row.names(importance_mdl)
       ord_imp_mdl<-importance_mdl[order(-importance_mdl$Overall),][1:20,]
@@ -982,7 +1117,6 @@ server <- function(input, output, session) {
     })  
 
     test_c5 <- reactive({
-      set.seed(1)
       test_mdl <- predict(c5(),
                           test_data(),
                           na.action=na.pass,
@@ -991,19 +1125,16 @@ server <- function(input, output, session) {
     })
 
     cm_c5 <- reactive({
-      set.seed(1)
-      conf_mtrx_mdl <- confusionMatrix(as.factor(test_data()[,1]),
-                                factor(test_c5(), levels=c(0,1)),
-                                positive='1',
-                                mode = "everything")
+      conf_mtrx_mdl <- confusionMatrix(test_data()$covid,
+                                       test_c5(),
+                                       positive='yes',
+                                       mode = "everything")
       return(conf_mtrx_mdl)
     })
-            
+    
     output$cfive <- renderPrint({
       print(cm_c5())
       print(c5())
-      #print(order_importance_c5())
-      #print(test_c5())
     })
     
     output$imp_cfive <- renderPrint({
@@ -1019,9 +1150,8 @@ server <- function(input, output, session) {
     #Decision Tree----
     dtree <- reactive ({
       set.seed(1)
-      #Sys.sleep(1) # system sleeping for 1 seconds for demo purpose
-      mdl<- train(as.factor(train_data()[,1])~.,
-                   data=train_data()[,-1],
+      mdl<- train((covid)~.,
+                   data=train_data(),
                    method = "rpart",
                    trControl=control(),
                    preProc = c(txt1()),
@@ -1030,7 +1160,6 @@ server <- function(input, output, session) {
     })
   
     order_importance_dt <- reactive({
-      set.seed(1)
       importance_mdl<-data.frame(varImp(dtree())$importance)
       importance_mdl$Vars<-row.names(importance_mdl)
       ord_imp_mdl<-importance_mdl[order(-importance_mdl$Overall),][1:20,]
@@ -1038,7 +1167,6 @@ server <- function(input, output, session) {
     })    
 
     test_dt <- reactive({
-      set.seed(1)
       test_mdl <- predict(dtree(),
                          test_data(),
                          na.action=na.pass,
@@ -1047,10 +1175,9 @@ server <- function(input, output, session) {
     })
 
     cm_dt <- reactive({
-      set.seed(1)
-      conf_mtrx_mdl <- confusionMatrix(as.factor(test_data()[,1]),
+      conf_mtrx_mdl <- confusionMatrix(test_data()$covid,
                                 test_dt(),
-                                positive='1',
+                                positive='yes',
                                 mode = "everything")
       return(conf_mtrx_mdl)
     })
@@ -1058,8 +1185,6 @@ server <- function(input, output, session) {
     output$dtree <- renderPrint({
       print(cm_dt())
       print(dtree())
-      #print(order_importance_dt())
-      #print(test_dt())
     })
     
     output$imp_dtree <- renderPrint({
@@ -1073,18 +1198,14 @@ server <- function(input, output, session) {
     })
     
     output$tree_dtree <- renderPlot({
-      #rpart.plot(dtree()$finalModel)
       fancyRpartPlot(dtree()$finalModel)
     })
-    
     
     #Random Forest----
     rf <- reactive ({
       set.seed(1)
-      #Sys.sleep(1) # system sleeping for 1 seconds for demo purpose
-      mdl<- train(as.factor(train_data()[,1])~.,
-                  data=train_data()[,-1],
-                  #cforest is ok but long running
+      mdl<- train((covid)~.,
+                  data=train_data(),
                   method = "rf",
                   trControl=control(),
                   preProc = c(txt1()),
@@ -1093,7 +1214,6 @@ server <- function(input, output, session) {
     })
 
     order_importance_rf <- reactive({
-      set.seed(1)
       importance_mdl<-data.frame(varImp(rf())$importance)
       importance_mdl$Vars<-row.names(importance_mdl)
       ord_imp_mdl<-importance_mdl[order(-importance_mdl$Overall),][1:20,]
@@ -1101,7 +1221,6 @@ server <- function(input, output, session) {
     })
     
     test_rf <- reactive({
-      set.seed(1)
       test_mdl <- predict(rf(),
                           test_data(),
                           na.action=na.pass,
@@ -1110,10 +1229,9 @@ server <- function(input, output, session) {
     })
 
     cm_rf <- reactive({
-      set.seed(1)
-      conf_mtrx_mdl <- confusionMatrix(as.factor(test_data()[,1]),
+      conf_mtrx_mdl <- confusionMatrix(test_data()$covid,
                                        test_rf(),
-                                       positive='1',
+                                       positive='yes',
                                        mode = "everything")
       return(conf_mtrx_mdl)
     })
@@ -1121,8 +1239,6 @@ server <- function(input, output, session) {
     output$rf <- renderPrint({
       print(cm_rf())
       print(rf())
-      #print(order_importance_rf())
-      #print(test_rf())
       })
     
     output$imp_rf <- renderPrint({
@@ -1130,23 +1246,16 @@ server <- function(input, output, session) {
       })
     
     output$wordrf <- renderPlot({
-      wordcloud(words = order_importance_rf()$Vars, freq = order_importance_rf()$Overall, scale=c(3,.1), min.freq = 1,
+      wordcloud(words = order_importance_rf()$Vars, freq = order_importance_rf()$Overall, scale=c(2,.1), min.freq = 1,
                 max.words=2000, random.order=TRUE, rot.per=0.1, 
                 colors=brewer.pal(8, "Paired"))
-    })
-    
-    output$tree_rf <- renderPlot({
-      #rpart.plot(dtree()$finalModel)
-      #fancyRpartPlot(rf()$finalModel)
-     #plot_tree(rf()$finalModel)
     })
     
     #XGBoost------
     xgb <- reactive ({
       set.seed(1)
-      #Sys.sleep(1) # system sleeping for 1 seconds for demo purpose
-      mdl<- train(as.factor(train_data()[,1])~.,
-                  data=train_data()[,-1],
+      mdl<- train((covid)~.,
+                  data=train_data(),
                   method = "xgbTree",
                   trControl=control(),
                   preProc = c(txt1()),
@@ -1156,7 +1265,6 @@ server <- function(input, output, session) {
     })
     
     order_importance_xgb <- reactive({
-      set.seed(1)
       importance_mdl<-data.frame(varImp(xgb())$importance)
       importance_mdl$Vars<-row.names(importance_mdl)
       ord_imp_mdl<-importance_mdl[order(-importance_mdl$Overall),][1:20,]
@@ -1164,7 +1272,6 @@ server <- function(input, output, session) {
     })
     
     test_xgb <- reactive({
-      set.seed(1)
       test_mdl <- predict(xgb(),
                           test_data(),
                           prob=TRUE,
@@ -1173,10 +1280,9 @@ server <- function(input, output, session) {
     })
     
     cm_xgb <- reactive({
-      set.seed(1)
-      conf_mtrx_mdl <- confusionMatrix(as.factor(test_data()[,1]),
+      conf_mtrx_mdl <- confusionMatrix(test_data()$covid,
                                        test_xgb(),
-                                       positive='1',
+                                       positive='yes',
                                        mode = "everything")
       return(conf_mtrx_mdl)
     })
@@ -1184,8 +1290,6 @@ server <- function(input, output, session) {
     output$xgb<- renderPrint({
       print(cm_xgb())
       print(xgb())
-      #print(order_importance_xgb())
-      #print(test_xgb()) 
     })
     
     output$imp_xgb <- renderPrint({
@@ -1193,21 +1297,13 @@ server <- function(input, output, session) {
     })
     
     output$wordxgb <- renderPlot({
-      wordcloud(words = order_importance_xgb()$Vars, freq = order_importance_xgb()$Overall, scale=c(3.3,.4), min.freq = 1,
+      wordcloud(words = order_importance_xgb()$Vars, freq = order_importance_xgb()$Overall, scale=c(2.7,.3), min.freq = 1,
                   max.words=2000, random.order=TRUE, rot.per=0.1, 
                   colors=brewer.pal(8, "Paired"))
     })
     
-    output$tree_xgb <- renderPlot({
-      #rpart.plot(dtree()$finalModel)
-      #fancyRpartPlot(dtree()$finalModel)
-      #xgb.plot.tree(model=xgb()$finalModel, trees=1)
-    })
-    
-
     #Compare Model---------
     modelscompare <- reactive({
-      set.seed(1)
       Sys.sleep(1) # system sleeping for 1 seconds for demo purpose
       mdlcmpr <- caret::resamples(list(C50=c5(),
                                        DTree=dtree(),
@@ -1230,7 +1326,7 @@ server <- function(input, output, session) {
     # Predict Upload -----    
     #This is for Upload Test Data    
     data3 <- reactive({
-      req(input$file2)    ## ?req #  require that the input is available
+      req(input$file2)
       inFilet <- input$file2
       dftst <- read.csv(inFilet$datapath,
                         header = input$testheader,
@@ -1255,7 +1351,6 @@ server <- function(input, output, session) {
     })
     
     datatst <- reactive({
-      #req(input$chs)
       if (input$chstst == "Upload Your Test Data") {
         datat <- data3()
       }
@@ -1284,12 +1379,32 @@ server <- function(input, output, session) {
                     options = list(pageLength=5,
                                    colReorder = TRUE,
                                    scrollX = TRUE))
-      #print(format(pred_glm(), digits=1, nsmall=1))
-      #print(format((round(pred_glm())), digits=2, nsmall=2))
-      #print(formattable((pred_glm(), digits = 2, format = "f")))
-      #p<-percent(pred_glm(), format = "d")
-      #print(p)
     })
+    
+    last_glm_data <- reactive({
+      set.seed(1)
+      last_pred <- cbind(pred_glm(), datatst())
+      return(last_pred)
+    })
+    
+    explainer_glm <- reactive({
+      set.seed(1)
+      explainer <- lime(train_data(), glm())
+      return(explainer)
+    })
+    
+    explanation_glm <- reactive({
+      set.seed(1)
+      explanation <- explain(last_glm_data()[input$num_pat_glm,], explainer_glm(), quantile_bins=T, n_labels = 1, n_features = input$num_feat_glm)
+      return(explanation)
+    })
+    
+    output$plot_lime_glm <- renderPlot ({
+      plot_features(explanation_glm()) +
+        ggtitle("Logistic Regression") +
+        theme(text = element_text(size = 14))
+    })
+    
 
 # C5 prediction -----
     pred_cfive <- reactive({
@@ -1308,10 +1423,32 @@ server <- function(input, output, session) {
                     options = list(pageLength=5,
                                    colReorder = TRUE,
                                    scrollX = TRUE))
-      #print(pred_cfive())
-      #print(data.frame(Result_for_C5.0=pred_cfive()))
     })
-
+    
+    last_c5_data <- reactive({
+      set.seed(1)
+      last_pred <- cbind(pred_cfive(), datatst())
+      return(last_pred)
+    })
+    
+    explainer_c5 <- reactive({
+      set.seed(1)
+      explainer <- lime(train_data(), c5())
+      return(explainer)
+    })
+    
+    explanation_c5 <- reactive({
+      set.seed(1)
+      explanation <- explain(last_c5_data()[input$num_pat_c5,], explainer_c5(), quantile_bins=T, n_labels = 1, n_features = input$num_feat_c5)
+      return(explanation)
+    })
+    
+    output$plot_lime_c5 <- renderPlot ({
+      plot_features(explanation_c5()) +
+        ggtitle("C5.0") +
+        theme(text = element_text(size = 14))
+    })
+    
 # D.tree prediction -----
     pred_dtree <- reactive({
       set.seed(1)
@@ -1329,9 +1466,32 @@ server <- function(input, output, session) {
                     options = list(pageLength=5,
                                    colReorder = TRUE,
                                    scrollX = TRUE))
-      #print(pred_dtree())
-      #print(data.frame(Result_for_Decision_Tree=pred_dtree()))
     })
+    
+    last_dtree_data <- reactive({
+      set.seed(1)
+      last_pred <- cbind(pred_dtree(), datatst())
+      return(last_pred)
+    })
+    
+    explainer_dtree <- reactive({
+      set.seed(1)
+      explainer <- lime(train_data(), dtree())
+      return(explainer)
+    })
+    
+    explanation_dtree <- reactive({
+      set.seed(1)
+      explanation <- explain(last_dtree_data()[input$num_pat_dtree,], explainer_dtree(), quantile_bins=T, n_labels = 1, n_features = input$num_feat_dtree)
+      return(explanation)
+    })
+    
+    output$plot_lime_dtree <- renderPlot ({
+      plot_features(explanation_dtree()) +
+        ggtitle("Decision Tree") +
+        theme(text = element_text(size = 14))
+    })
+    
 
 # RF prediction -----
     pred_rf <- reactive({
@@ -1345,15 +1505,37 @@ server <- function(input, output, session) {
     })
     
     output$pred_rf_result<- renderDataTable({
-      rfdt<-data.frame(Result_for_R.Forest=pred_rf())
+      rfdt<-data.frame(Result_for_RF=pred_rf())
       DT::datatable(rfdt, extensions = "ColReorder",
                     options = list(pageLength=5,
                                    colReorder = TRUE,
                                    scrollX = TRUE))
-      #print(pred_rf())
-      #print(data.frame(Result_for_Random_Forest=pred_rf()))
-    })    
-
+    })
+    
+    last_rf_data <- reactive({
+      set.seed(1)
+      last_pred <- cbind(pred_rf(), datatst())
+      return(last_pred)
+    })
+    
+    explainer_rf <- reactive({
+      set.seed(1)
+      explainer <- lime(train_data(), rf())
+      return(explainer)
+    })
+    
+    explanation_rf <- reactive({
+      set.seed(1)
+      explanation <- explain(last_rf_data()[input$num_pat_rf,], explainer_rf(), quantile_bins=T, n_labels = 1, n_features = input$num_feat_rf)
+      return(explanation)
+    })
+    
+    output$plot_lime_rf <- renderPlot ({
+      plot_features(explanation_rf()) +
+        ggtitle("Random Forest") +
+        theme(text = element_text(size = 14))
+    })
+    
 # XGB prediction -----
     pred_xgb <- reactive({
       set.seed(1)
@@ -1371,9 +1553,32 @@ server <- function(input, output, session) {
                     options = list(pageLength=5,
                                    colReorder = TRUE,
                                    scrollX = TRUE))
-      #print(pred_xgb())
-      #print(data.frame(Result_for_XGBoost=pred_xgb()))
     })      
+    
+    last_xgb_data <- reactive({
+      set.seed(1)
+      last_pred <- cbind(pred_xgb(), datatst())
+      return(last_pred)
+    })
+    
+    explainer_xgb <- reactive({
+      set.seed(1)
+      explainer <- lime(train_data(), xgb())
+      return(explainer)
+    })
+    
+    explanation_xgb <- reactive({
+      set.seed(1)
+      explanation <- explain(last_xgb_data()[input$num_pat_xgb,], explainer_xgb(), quantile_bins=T, n_labels = 1, n_features = input$num_feat_xgb)
+      return(explanation)
+    })
+    
+    output$plot_lime_xgb <- renderPlot ({
+      plot_features(explanation_xgb()) +
+        ggtitle("XGBoost") +
+        theme(text = element_text(size = 14))
+    })
+    
               
 }
 shinyApp(ui, server)
